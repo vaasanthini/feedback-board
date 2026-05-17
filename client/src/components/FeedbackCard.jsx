@@ -1,61 +1,19 @@
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
 import StatusBadge from './StatusBadge.jsx';
 import VoteButton from './VoteButton.jsx';
 import { useAdmin } from '../context/AdminContext.jsx';
-import { updateStatus, deleteFeedback } from '../api/feedback.js';
-
-const STATUSES = ['open', 'in_progress', 'done'];
+import { useAdminActions } from '../hooks/useAdminActions.js';
+import { STATUSES } from '../constants/feedback.js';
 
 export default function FeedbackCard({ item, onDelete, onStatusChange }) {
   const { isAdmin } = useAdmin();
-  const [status, setStatus] = useState(item.status);
-  const [closing, setClosing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const isClosed = status === 'closed';
-
-  async function handleStatusChange(e) {
-    const newStatus = e.target.value;
-    setStatus(newStatus);
-    try {
-      await updateStatus(item.id, newStatus);
-      onStatusChange?.(item.id, newStatus);
-    } catch (err) {
-      setStatus(item.status);
-      alert(err.message);
-    }
-  }
-
-  async function handleToggleClose(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    const newStatus = isClosed ? 'open' : 'closed';
-    setClosing(true);
-    try {
-      await updateStatus(item.id, newStatus);
-      setStatus(newStatus);
-      onStatusChange?.(item.id, newStatus);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setClosing(false);
-    }
-  }
-
-  async function handleDelete(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm('Delete this feedback?')) return;
-    setDeleting(true);
-    try {
-      await deleteFeedback(item.id);
-      onDelete?.(item.id);
-    } catch (err) {
-      setDeleting(false);
-      alert(err.message);
-    }
-  }
+  const { status, isClosed, closing, deleting, handleStatusChange, handleToggleClose, handleDelete } =
+    useAdminActions({
+      feedbackId: item.id,
+      initialStatus: item.status,
+      onStatusChange: (newStatus) => onStatusChange?.(item.id, newStatus),
+      onDeleted: () => onDelete?.(item.id),
+    });
 
   return (
     <div className={`flex gap-4 p-4 bg-white dark:bg-slate-800 rounded-xl border transition-all group ${
@@ -87,7 +45,7 @@ export default function FeedbackCard({ item, onDelete, onStatusChange }) {
           {!isClosed && (
             <select
               value={status}
-              onChange={handleStatusChange}
+              onChange={(e) => handleStatusChange(e.target.value)}
               onClick={(e) => e.stopPropagation()}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-md px-2 py-1 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-400 transition-colors"
             >
@@ -98,7 +56,7 @@ export default function FeedbackCard({ item, onDelete, onStatusChange }) {
           )}
 
           <button
-            onClick={handleToggleClose}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleClose(); }}
             disabled={closing}
             title={isClosed ? 'Reopen this feedback' : 'Close this feedback'}
             className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md border transition-all ${
@@ -111,7 +69,7 @@ export default function FeedbackCard({ item, onDelete, onStatusChange }) {
           </button>
 
           <button
-            onClick={handleDelete}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(); }}
             disabled={deleting}
             className="text-xs text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 font-medium transition-colors text-left"
           >

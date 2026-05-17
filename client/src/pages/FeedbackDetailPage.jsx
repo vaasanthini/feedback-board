@@ -1,69 +1,33 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getFeedbackById, updateStatus, deleteFeedback } from '../api/feedback.js';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { getFeedbackById } from '../api/feedback.js';
 import { useAdmin } from '../context/AdminContext.jsx';
+import { useAdminActions } from '../hooks/useAdminActions.js';
+import { STATUSES } from '../constants/feedback.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import VoteButton from '../components/VoteButton.jsx';
 
-const STATUSES = ['open', 'in_progress', 'done'];
-
 export default function FeedbackDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { isAdmin } = useAdmin();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [status, setStatus] = useState('');
-  const [closing, setClosing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const isClosed = status === 'closed';
 
   useEffect(() => {
     getFeedbackById(id)
-      .then((data) => {
-        setItem(data);
-        setStatus(data.status);
-      })
+      .then(setItem)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
 
-  async function handleStatusChange(e) {
-    const newStatus = e.target.value;
-    setStatus(newStatus);
-    try {
-      await updateStatus(id, newStatus);
-    } catch (err) {
-      setStatus(item.status);
-      alert(err.message);
-    }
-  }
-
-  async function handleToggleClose() {
-    const newStatus = isClosed ? 'open' : 'closed';
-    setClosing(true);
-    try {
-      await updateStatus(id, newStatus);
-      setStatus(newStatus);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setClosing(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!confirm('Delete this feedback?')) return;
-    setDeleting(true);
-    try {
-      await deleteFeedback(id);
-      window.location.href = '/';
-    } catch (err) {
-      setDeleting(false);
-      alert(err.message);
-    }
-  }
+  const { status, isClosed, closing, deleting, handleStatusChange, handleToggleClose, handleDelete } =
+    useAdminActions({
+      feedbackId: id,
+      initialStatus: item?.status ?? 'open',
+      onDeleted: () => navigate('/'),
+    });
 
   if (loading) {
     return (
@@ -122,7 +86,7 @@ export default function FeedbackDetailPage() {
                         <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Change status:</label>
                         <select
                           value={status}
-                          onChange={handleStatusChange}
+                          onChange={(e) => handleStatusChange(e.target.value)}
                           className="text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
                         >
                           {STATUSES.map((s) => (
