@@ -7,7 +7,7 @@ export async function findAll({ status, sort, voterToken }) {
     : 'ORDER BY f.created_at DESC';
 
   if (status && status !== 'all') {
-    return sql.unsafe(
+    return sql(
       `SELECT f.*,
          CASE WHEN v.voter_token IS NOT NULL THEN 1 ELSE 0 END AS has_voted
        FROM feedback f
@@ -18,7 +18,7 @@ export async function findAll({ status, sort, voterToken }) {
     );
   }
 
-  return sql.unsafe(
+  return sql(
     `SELECT f.*,
        CASE WHEN v.voter_token IS NOT NULL THEN 1 ELSE 0 END AS has_voted
      FROM feedback f
