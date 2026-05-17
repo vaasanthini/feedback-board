@@ -4,21 +4,21 @@ import * as service from './service.js';
 
 const router = Router();
 
-router.get('/', (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { status, sort } = req.query;
     const voterToken = req.headers['x-voter-token'] || '';
-    const items = service.listFeedback({ status, sort, voterToken });
+    const items = await service.listFeedback({ status, sort, voterToken });
     res.json(items);
   } catch (err) {
     next(err);
   }
 });
 
-router.post('/', (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const { title, description } = req.body;
-    const item = service.createFeedback({ title, description });
+    const item = await service.createFeedback({ title, description });
     res.status(201).json(item);
   } catch (err) {
     next(err);
@@ -29,42 +29,42 @@ router.get('/admin/verify', adminAuth, (_req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/:id', (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const voterToken = req.headers['x-voter-token'] || '';
-    const item = service.getFeedback(req.params.id, voterToken);
+    const item = await service.getFeedback(req.params.id, voterToken);
     res.json(item);
   } catch (err) {
     next(err);
   }
 });
 
-router.post('/:id/vote', (req, res, next) => {
+router.post('/:id/vote', async (req, res, next) => {
   try {
     const voterToken = req.headers['x-voter-token'] || req.body.voter_token || '';
     if (!voterToken) {
       return res.status(400).json({ error: 'voter_token is required' });
     }
-    const result = service.toggleVote(req.params.id, voterToken);
+    const result = await service.toggleVote(req.params.id, voterToken);
     res.json(result);
   } catch (err) {
     next(err);
   }
 });
 
-router.patch('/:id/status', adminAuth, (req, res, next) => {
+router.patch('/:id/status', adminAuth, async (req, res, next) => {
   try {
     const { status } = req.body;
-    service.changeStatus(req.params.id, status);
+    await service.changeStatus(req.params.id, status);
     res.json({ success: true });
   } catch (err) {
     next(err);
   }
 });
 
-router.delete('/:id', adminAuth, (req, res, next) => {
+router.delete('/:id', adminAuth, async (req, res, next) => {
   try {
-    service.deleteFeedback(req.params.id);
+    await service.deleteFeedback(req.params.id);
     res.json({ success: true });
   } catch (err) {
     next(err);

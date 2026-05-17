@@ -1,99 +1,84 @@
-import { getDb } from '../db/index.js';
+import { sql } from '../db/index.js';
 
-export function findAll({ status, sort, voterToken }) {
-  const db = getDb();
-  let query = `
+export async function findAll({ status, sort, voterToken }) {
+  const token = voterToken || '';
+  const orderBy = sort === 'top'
+    ? 'ORDER BY f.upvotes DESC, f.created_at DESC'
+    : 'ORDER BY f.created_at DESC';
+
+  if (status && status !== 'all') {
+    return sql.unsafe(
+      `SELECT f.*,
+         CASE WHEN v.voter_token IS NOT NULL THEN 1 ELSE 0 END AS has_voted
+       FROM feedback f
+       LEFT JOIN votes v ON v.feedback_id = f.id AND v.voter_token = $1
+       WHERE f.status = $2
+       ${orderBy}`,
+      [token, status]
+    );
+  }
+
+  return sql.unsafe(
+    `SELECT f.*,
+       CASE WHEN v.voter_token IS NOT NULL THEN 1 ELSE 0 END AS has_voted
+     FROM feedback f
+     LEFT JOIN votes v ON v.feedback_id = f.id AND v.voter_token = $1
+     ${orderBy}`,
+    [token]
+  );
+}
+
+export async function findById(id, voterToken) {
+  const rows = await sql`
     SELECT f.*,
       CASE WHEN v.voter_token IS NOT NULL THEN 1 ELSE 0 END AS has_voted
     FROM feedback f
-    LEFT JOIN votes v ON v.feedback_id = f.id AND v.voter_token = ?
+    LEFT JOIN votes v ON v.feedback_id = f.id AND v.voter_token = ${voterToken || ''}
+    WHERE f.id = ${id}
   `;
-  const params = [voterToken || ''];
-
-  if (status && status !== 'all') {
-    query += ' WHERE f.status = ?';
-    params.push(status);
-  }
-
-  if (sort === 'top') {
-    query += ' ORDER BY f.upvotes DESC, f.created_at DESC';
-  } else {
-    query += ' ORDER BY f.created_at DESC';
-  }
-
-  return db.prepare(query).all(...params);
+  return rows[0] ?? null;
 }
 
-export function findById(id, voterToken) {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT f.*,
-        CASE WHEN v.voter_token IS NOT NULL THEN 1 ELSE 0 END AS has_voted
-       FROM feedback f
-       LEFT JOIN votes v ON v.feedback_id = f.id AND v.voter_token = ?
-       WHERE f.id = ?`
+export async function insert(feedback) {
+  await sql`
+    INSERT INTO feedback (id, title, description, status, upvotes, created_at, updated_at)
+    VALUES (
+      ${feedback.id}, ${feedback.title}, ${feedback.description},
+      ${feedback.status}, ${feedback.upvotes}, ${feedback.created_at}, ${feedback.updated_at}
     )
-    .get(voterToken || '', id);
+  `;
 }
 
-export function insert(feedback) {
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO feedback (id, title, description, status, upvotes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    feedback.id,
-    feedback.title,
-    feedback.description,
-    feedback.status,
-    feedback.upvotes,
-    feedback.created_at,
-    feedback.updated_at
-  );
+export async function hasVoted(feedbackId, voterToken) {
+  const rows = await sql`
+    SELECT 1 FROM votes WHERE feedback_id = ${feedbackId} AND voter_token = ${voterToken}
+  `;
+  return rows.length > 0;
 }
 
-export function hasVoted(feedbackId, voterToken) {
-  const db = getDb();
-  return !!db
-    .prepare('SELECT 1 FROM votes WHERE feedback_id = ? AND voter_token = ?')
-    .get(feedbackId, voterToken);
+export async function addVote(feedbackId, voterToken) {
+  await sql`INSERT INTO votes (feedback_id, voter_token) VALUES (${feedbackId}, ${voterToken})`;
+  await sql`
+    UPDATE feedback SET upvotes = upvotes + 1, updated_at = ${new Date().toISOString()}
+    WHERE id = ${feedbackId}
+  `;
 }
 
-export function addVote(feedbackId, voterToken) {
-  const db = getDb();
-  db.prepare('INSERT INTO votes (feedback_id, voter_token) VALUES (?, ?)').run(
-    feedbackId,
-    voterToken
-  );
-  db.prepare('UPDATE feedback SET upvotes = upvotes + 1, updated_at = ? WHERE id = ?').run(
-    new Date().toISOString(),
-    feedbackId
-  );
+export async function removeVote(feedbackId, voterToken) {
+  await sql`DELETE FROM votes WHERE feedback_id = ${feedbackId} AND voter_token = ${voterToken}`;
+  await sql`
+    UPDATE feedback SET upvotes = upvotes - 1, updated_at = ${new Date().toISOString()}
+    WHERE id = ${feedbackId}
+  `;
 }
 
-export function removeVote(feedbackId, voterToken) {
-  const db = getDb();
-  db.prepare('DELETE FROM votes WHERE feedback_id = ? AND voter_token = ?').run(
-    feedbackId,
-    voterToken
-  );
-  db.prepare('UPDATE feedback SET upvotes = upvotes - 1, updated_at = ? WHERE id = ?').run(
-    new Date().toISOString(),
-    feedbackId
-  );
+export async function updateStatus(id, status) {
+  await sql`
+    UPDATE feedback SET status = ${status}, updated_at = ${new Date().toISOString()}
+    WHERE id = ${id}
+  `;
 }
 
-export function updateStatus(id, status) {
-  const db = getDb();
-  db.prepare('UPDATE feedback SET status = ?, updated_at = ? WHERE id = ?').run(
-    status,
-    new Date().toISOString(),
-    id
-  );
-}
-
-export function remove(id) {
-  const db = getDb();
-  db.prepare('DELETE FROM feedback WHERE id = ?').run(id);
+export async function remove(id) {
+  await sql`DELETE FROM feedback WHERE id = ${id}`;
 }
